@@ -8,7 +8,6 @@
 (local text (autoload :conjure.text))
 (local editor (autoload :conjure.editor))
 (local timer (autoload :conjure.timer))
-(local sponsors (require :conjure.sponsors))
 
 (local state
   {:last-open-cmd :vsplit

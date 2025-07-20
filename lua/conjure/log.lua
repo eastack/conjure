@@ -10,7 +10,6 @@ local config = autoload("conjure.config")
 local text = autoload("conjure.text")
 local editor = autoload("conjure.editor")
 local timer = autoload("conjure.timer")
-local sponsors = require("conjure.sponsors")
 local state = {["last-open-cmd"] = "vsplit", hud = {id = nil, timer = nil, ["created-at-ms"] = 0, ["low-priority-spam"] = {streak = 0, ["help-displayed?"] = false}}, ["jump-to-latest"] = {mark = nil, ns = vim.api.nvim_create_namespace("conjure_log_jump_to_latest")}}
 local function _break()
   return str.join({client.get("comment-prefix"), string.rep("-", config["get-in"]({"log", "break_length"}))})
