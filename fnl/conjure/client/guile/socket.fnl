@@ -37,6 +37,8 @@
 (local base-module "(guile)")
 (local default-context "(guile-user)")
 
+(fn M.valid-str? [code] (ts.valid-str? :scheme code))
+
 (fn normalize-context [arg] 
   (let [tokens  (str.split arg "%s+") 
         context (.. "(" (str.join " " tokens) ")")]
@@ -110,7 +112,8 @@
 (fn M.eval-str [opts]
   (with-repl-or-warn
     (fn [repl]
-      (let [context (or opts.context default-context)]
+      (if (M.valid-str? opts.code)
+       (let [context (or opts.context default-context)]
         (ensure-module-initialized repl context) 
         (-?> (.. (build-switch-module-command context) "\n" opts.code)
              (clean-input-code)
@@ -124,7 +127,8 @@
                    (opts.on-result (str.join "\n" (format-message (a.last msgs)))))
                  (when (not opts.passive?)
                    (a.run! display-result msgs)))
-               {:batch? true}))))))
+               {:batch? true})))
+       (log.append [(.. M.comment-prefix "eval error: could not parse form")])))))
 
 (fn M.eval-file [opts]
   (M.eval-str (a.assoc opts :code (.. "(load \"" opts.file-path "\")"))))
@@ -164,16 +168,19 @@
       (a.assoc (state) :repl nil)))
   (a.assoc (state) :known-contexts {}))
 
-(fn parse-guile-result [s]
+(fn M.parse-guile-result [s stray-output-fn]
   (let [prompt (s:find "scheme@%([%w%-%s]+%)> ")]
     (if
       prompt
       (let [(ind1 _ result) (s:find "%$%d+ = ([^\n]+)\n")
             stray-output (s:sub
                            1
-                           (- (if result ind1 prompt) 1))]
+                           (- (if result
+                                  ind1
+                                  prompt)
+                              1))]
         (when (> (length stray-output) 0)
-          (log.append
+          (stray-output-fn
             (-> (text.trim-last-newline stray-output)
                 (text.prefixed-lines "; (out) "))))
         {:done? true
@@ -216,17 +223,17 @@
     (a.assoc
       (state) :repl
       (socket.start
-        {:parse-output parse-guile-result
-        :pipename pipename
-        :host-port host-port
-        :on-success (fn []
-                      (display-repl-status))
-        :on-error (fn [msg repl]
-                    (display-result msg)
-                    (repl.send ",q\n" (fn []))) ; Don't bother with debugger.
-        :on-failure M.disconnect
-        :on-close M.disconnect
-        :on-stray-output display-result}))))
+        {:parse-output #(M.parse-guile-result $1 log.append)
+         :pipename pipename
+         :host-port host-port
+         :on-success (fn []
+                       (display-repl-status))
+         :on-error (fn [msg repl]
+                     (display-result msg)
+                     (repl.send ",q\n" (fn []))) ; Don't bother with debugger.
+         :on-failure M.disconnect
+         :on-close M.disconnect
+         :on-stray-output display-result}))))
 
 (fn connected? []
   (if (state :repl)

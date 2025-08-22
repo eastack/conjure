@@ -35,10 +35,17 @@
     "You've already completed this lesson! You can (u)ndo and run it again though if you'd like."))
 
 (fn start []
+  (when (and (not= vim.g.conjure#filetype#fennel "conjure.client.fennel.aniseed")
+             (not= vim.g.conjure#filetype#fennel "conjure.client.fennel.nfnl"))
+    (vim.notify_once
+      (.. "Warning: g:conjure#filetype#fennel not set to a supported client.\n"
+          "Overriding to 'conjure.client.fennel.nfnl'"))
+    (set vim.g.conjure#filetype#fennel "conjure.client.fennel.nfnl"))
+
   (when (not (editor.has-filetype? :fennel))
     (vim.notify_once
-      "Warning: No Fennel filetype found, falling back to Clojure syntax."
-      "Install https://github.com/atweiden/vim-fennel for better Fennel support.")
+      (.. "Warning: No Fennel filetype found, falling back to Clojure syntax.\n"
+          "Install https://github.com/atweiden/vim-fennel for better Fennel support."))
     (set vim.g.conjure#filetype#clojure vim.g.conjure#filetype#fennel)
     (nvim.ex.augroup :conjure_school_filetype)
     (nvim.ex.autocmd_)
@@ -169,7 +176,7 @@
      ";; Wonderful!"
      ";; Visual evaluation is great for specific sections of a form."
      (.. ";; You can also evaluate a given motion with " (map-str :eval_motion))
-     (.. ";; Try " (map-str :eval_motion) "iw below to evaluate the word.")
+     (.. ";; Try " (map-str :eval_motion) "iW below to evaluate the word.")
      "school.lesson-6-message"
      ""
      (.. ";; Use " (map-str :eval_motion) "a( to evaluate the lesson form.")

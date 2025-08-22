@@ -1,4 +1,4 @@
-(local {: describe : it : spy} (require :plenary.busted))
+(local {: describe : it } (require :plenary.busted))
 (local assert (require :luassert.assert))
 (local guile (require :conjure.client.guile.socket))
 (local config (require :conjure.config))
@@ -18,6 +18,8 @@
 (describe "conjure.client.guile.socket"
   (fn []
     (tset package.loaded "conjure.remote.socket" fake-socket)
+    (tset guile :valid-str? (fn [_] true))
+
     (describe "context extraction"
       (fn [] 
         (it "returns nil for hello world"
@@ -38,12 +40,94 @@
         (it "returns nil for (define-m;odule (my-module))"
             (fn []
               (assert.are.equal nil (guile.context "(define-m;odule (my-module))"))))
-        (it "returns (another-module) for ;\n(define-module ( another-module ))"
+        (it "returns (another-module) for ;\\n(define-module ( another-module ))"
             (fn []
               (assert.are.equal "(another-module)" (guile.context ";\n(define-module ( another-module ))"))))
         (it "returns (a-module specification) for ;\\n(define-module\\n;some comments\\n( a-module\\n; more comments\\n specification))"
             (fn []
               (assert.are.equal "(a-module specification)" (guile.context ";\n(define-module\n;some comments\n( a-module\n; more comments\n specification))"))))))
+
+    (describe "parse-guile-result"
+      (fn []
+        (it "returns a result in the simple happy path"
+          (fn []
+            (assert.are.same
+              {:done? true
+               :error? false
+               :result "1234"}
+              (guile.parse-guile-result "$1 = 1234\nscheme@(guile-user)> "))))
+
+        (it "handles single line output from display, missing a newline"
+          (fn []
+            (let [stray-output []
+                  capture-stray-output (fn [output]
+                                        (table.insert stray-output output))]
+              (assert.are.same
+                {:done? true
+                 :error? false
+                 :result nil}
+                (guile.parse-guile-result "hischeme@(guile-user)> " capture-stray-output))
+              (assert.are.same
+                [["; (out) hi"]]
+                stray-output))))
+
+        (it "prompts with an error number report as an error"
+          (fn []
+            (assert.are.same
+              {:done? true
+               :error? true}
+              (guile.parse-guile-result "scheme@(guile-user) [1]> "))))
+
+        ; (it "handles multiple return values"
+        ;   (fn []
+        ;     (let [stray-output []
+        ;           capture-stray-output (fn [output]
+        ;                                 (table.insert stray-output output))]
+        ;       (assert.are.same
+        ;         {:done? true
+        ;          :error? false
+        ;          :result "(values 10 20 30)"}
+        ;         (guile.parse-guile-result "hi\n$1 = 10\n$2 = 20\n$3 = 30\nscheme@(guile-user)> " capture-stray-output))
+        ;       (assert.are.same
+        ;         [["; (out) hi"]]
+        ;         stray-output))))
+        ))
+
+    (describe "eval-str" 
+      (fn []
+        (config.merge {:client {:guile {:socket
+                        {:pipename "fake-pipe" :host_port nil}}}}
+                      {:overwrite? true})
+        (it "does eval string when valid-str? returns true"
+            (fn []
+              (let [expected-code "(valid form)"
+                    calls []
+                    spy-send (fn [call] (table.insert calls call))
+                    fake-repl (fake-socket.build-fake-repl spy-send)]
+                (fake-socket.set-fake-repl fake-repl)
+
+                (guile.connect {})
+                (set-repl-connected fake-repl)
+                (guile.eval-str {:code expected-code :context nil})
+                (guile.disconnect)
+
+                (assert.are.equal (.. ",m (guile-user)\n" expected-code) (. calls 3)))))
+
+        (it "does not eval string when valid-str? returns false"
+            (fn []
+              (let [calls []
+                    spy-send (fn [call] (table.insert calls call))
+                    fake-repl (fake-socket.build-fake-repl spy-send)]
+                (tset guile :valid-str? (fn [_] false))
+                (fake-socket.set-fake-repl fake-repl)
+
+                (guile.connect {})
+                (set-repl-connected fake-repl)
+                (guile.eval-str {:code "(some invalid form" :context nil})
+                (guile.disconnect)
+
+                (assert.same [] calls)
+                (tset guile :valid-str? (fn [_] true)))))))
 
     (describe "module initialization"
       (fn []
